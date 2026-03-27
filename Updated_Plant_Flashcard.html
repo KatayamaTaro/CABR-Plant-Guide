@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Study Portal (Max View)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <style>
+        .perspective { perspective: 2000px; }
+        .backface-hidden { backface-visibility: hidden; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion } = window.Motion;
+
+        function FlashcardApp() {
+            const [mode, setMode] = useState("edit");
+            const [cards, setCards] = useState(() => {
+                const saved = localStorage.getItem("plant-cards");
+                return saved ? JSON.parse(saved) : [];
+            });
+            
+            const [sessionCards, setSessionCards] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [flipped, setFlipped] = useState(false);
+            const [correctCount, setCorrectCount] = useState(0); // Track correct answers
+            
+            const [answer, setAnswer] = useState("");
+            const [image, setImage] = useState("");
+            const [editingIndex, setEditingIndex] = useState(null);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                localStorage.setItem("plant-cards", JSON.stringify(cards));
+                if (sessionCards.length === 0 && cards.length > 0 && correctCount === 0) {
+                    setSessionCards([...cards]);
+                }
+            }, [cards]);
+
+            const addOrUpdateCard = () => {
+                if (!answer || !image) return;
+                if (editingIndex !== null) {
+                    const updated = [...cards];
+                    updated[editingIndex] = { answer, image };
+                    setCards(updated);
+                    setEditingIndex(null);
+                } else {
+                    setCards([...cards, { answer, image }]);
+                }
+                setAnswer("");
+                setImage("");
+            };
+
+            const resetSession = () => {
+                setSessionCards([...cards]);
+                setCurrentIndex(0);
+                setFlipped(false);
+                setCorrectCount(0);
+            };
+
+            const shuffleCards = () => {
+                const shuffled = [...sessionCards].sort(() => Math.random() - 0.5);
+                setSessionCards(shuffled);
+                setCurrentIndex(0);
+                setFlipped(false);
+            };
+
+            const nextCard = () => {
+                setFlipped(false);
+                setCurrentIndex((prev) => (prev + 1) % sessionCards.length);
+            };
+
+            const prevCard = () => {
+                setFlipped(false);
+                setCurrentIndex((prev) => (prev - 1 + sessionCards.length) % sessionCards.length);
+            };
+
+            const handleMark = (isCorrect) => {
+                setFlipped(false);
+                setTimeout(() => {
+                    if (isCorrect) {
+                        setCorrectCount(prev => prev + 1);
+                        const updated = sessionCards.filter((_, i) => i !== currentIndex);
+                        setSessionCards(updated);
+                        if (currentIndex >= updated.length && updated.length > 0) {
+                            setCurrentIndex(0);
+                        }
+                    } else {
+                        const updated = [...sessionCards];
+                        const card = updated.splice(currentIndex, 1)[0];
+                        updated.push(card);
+                        setSessionCards(updated);
+                        if (currentIndex >= updated.length) setCurrentIndex(0);
+                    }
+                }, 150);
+            };
+
+            const deleteCard = (index) => {
+                if(confirm("Delete this plant?")) {
+                    const updated = cards.filter((_, i) => i !== index);
+                    setCards(updated);
+                }
+            };
+
+            const exportLibrary = () => {
+                const dataStr = JSON.stringify(cards, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', 'plant_library.json');
+                linkElement.click();
+            };
+
+            const importLibrary = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if (Array.isArray(imported)) {
+                            setCards([...cards, ...imported]);
+                        }
+                    } catch (err) { alert("Invalid file"); }
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-8 flex flex-col items-center w-full max-w-6xl mx-auto">
+                    <header className="flex flex-col md:flex-row justify-between w-full items-center mb-8 gap-4">
+                        <h1 className="text-4xl font-black text-green-900 tracking-tight">🌿 CABR Study Guide</h1>
+                        <div className="flex gap-3">
+                            <button onClick={exportLibrary} className="text-xs font-bold bg-white border border-gray-200 px-4 py-2 rounded-lg hover:shadow-md transition">Export JSON</button>
+                            <button onClick={() => fileInputRef.current.click()} className="text-xs font-bold bg-white border border-gray-200 px-4 py-2 rounded-lg hover:shadow-md transition">Import JSON</button>
+                            <input type="file" ref={fileInputRef} onChange={importLibrary} className="hidden" accept=".json" />
+                        </div>
+                    </header>
+                    
+                    <nav className="flex gap-2 mb-10 bg-gray-200/50 p-1.5 rounded-2xl">
+                        <button className={`px-8 py-3 rounded-xl font-black transition-all ${mode === 'edit' ? 'bg-green-800 text-white shadow-lg scale-105' : 'text-gray-500 hover:bg-gray-200'}`} onClick={() => setMode("edit")}>EDITOR</button>
+                        <button className={`px-8 py-3 rounded-xl font-black transition-all ${mode === 'play' ? 'bg-green-800 text-white shadow-lg scale-105' : 'text-gray-500 hover:bg-gray-200'}`} onClick={() => { setMode("play"); if(sessionCards.length === 0 && correctCount === 0) setSessionCards([...cards]); }}>STUDY</button>
+                    </nav>
+
+                    {mode === "edit" && (
+                        <div className="w-full grid md:grid-cols-2 gap-10">
+                            <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 h-fit sticky top-8">
+                                <h2 className="text-2xl font-bold mb-6 text-green-950 underline decoration-green-300 underline-offset-8">Add Plant</h2>
+                                <div className="space-y-5">
+                                    <input className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-green-500 focus:bg-white outline-none transition-all font-medium" placeholder="Species Name" value={answer} onChange={(e) => setAnswer(e.target.value)} />
+                                    <input className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-green-500 focus:bg-white outline-none transition-all font-medium text-sm" placeholder="Paste Image URL here..." value={image} onChange={(e) => setImage(e.target.value)} />
+                                    <button className="w-full bg-green-800 text-white font-black py-4 rounded-2xl hover:bg-green-900 shadow-xl transition-transform active:scale-[0.98]" onClick={addOrUpdateCard}>
+                                        {editingIndex !== null ? "UPDATE PLANT" : "ADD TO COLLECTION"}
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <h2 className="text-2xl font-bold mb-6 text-green-950">Collection ({cards.length})</h2>
+                                <div className="grid gap-4">
+                                    {cards.map((c, i) => (
+                                        <div key={i} className="bg-white p-4 flex justify-between items-center rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition group">
+                                            <div className="flex items-center gap-4">
+                                                <img src={c.image} className="w-16 h-16 rounded-xl object-cover bg-gray-100" />
+                                                <span className="font-bold text-lg">{c.answer}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button className="text-blue-500 font-bold px-3 py-1 rounded-lg hover:bg-blue-50" onClick={() => {setAnswer(c.answer); setImage(c.image); setEditingIndex(i)}}>Edit</button>
+                                                <button className="text-red-400 font-bold px-3 py-1 rounded-lg hover:bg-red-50" onClick={() => deleteCard(i)}>Delete</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {mode === "play" && (
+                        <div className="flex flex-col items-center gap-8 w-full">
+                            {/* Scoreboard and Progress Section */}
+                            <div className="w-full max-w-4xl px-4 flex flex-col gap-2">
+                                <div className="flex justify-between items-end">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Mastery Score</span>
+                                        <span className="text-3xl font-black text-green-900 leading-none">{correctCount} <span className="text-sm text-gray-400 font-bold">Plants Correct</span></span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Session Progress</span>
+                                        <div className="text-xl font-black text-gray-600 leading-none">
+                                            {sessionCards.length > 0 ? currentIndex + 1 : 0} <span className="text-sm text-gray-300">of</span> {sessionCards.length}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="h-3 bg-gray-200 rounded-full shadow-inner overflow-hidden">
+                                    <div 
+                                        className="h-full bg-green-600 transition-all duration-700 rounded-full" 
+                                        style={{width: `${(correctCount / cards.length) * 100}%`}}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            {sessionCards.length > 0 ? (
+                                <>
+                                    <div className="perspective w-full max-w-4xl min-h-[400px] md:min-h-[500px] h-fit cursor-pointer flex justify-center items-center" onClick={() => setFlipped(!flipped)}>
+                                        <motion.div 
+                                            key={sessionCards[currentIndex]?.image}
+                                            className="relative w-full h-full min-h-[400px] md:min-h-[500px]"
+                                            animate={{ rotateY: flipped ? 180 : 0 }}
+                                            transition={{ duration: 0.6, type: "spring", stiffness: 150, damping: 20 }}
+                                            style={{ transformStyle: "preserve-3d" }}
+                                        >
+                                            <div className="absolute inset-0 backface-hidden bg-white border-[12px] border-white rounded-[3rem] shadow-2xl overflow-hidden flex items-center justify-center">
+                                                <img src={sessionCards[currentIndex]?.image} className="max-w-full max-h-full w-auto h-auto object-contain rounded-2xl" alt="Plant Image" />
+                                                <div className="absolute bottom-6 right-8 bg-black/40 backdrop-blur-md text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">Click to see name</div>
+                                            </div>
+                                            <div className="absolute inset-0 backface-hidden flex items-center justify-center p-12 text-6xl font-black text-green-950 bg-green-50 rounded-[3.1rem] border-[12px] border-white shadow-2xl" style={{ transform: "rotateY(180deg)" }}>
+                                                <span className="text-center drop-shadow-sm">{sessionCards[currentIndex]?.answer}</span>
+                                            </div>
+                                        </motion.div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-4 w-full max-w-4xl">
+                                        <div className="flex gap-4 items-stretch">
+                                            <button className="flex-1 py-5 bg-red-100 text-red-700 border-2 border-red-200 rounded-3xl font-black hover:bg-red-200 shadow-sm transition-all uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); handleMark(false); }}>❌ Incorrect</button>
+                                            
+                                            <div className="flex bg-white border-2 border-gray-200 rounded-3xl items-center overflow-hidden">
+                                                <button onClick={(e) => { e.stopPropagation(); prevCard(); }} className="px-6 py-5 hover:bg-gray-100 transition-colors border-r border-gray-200 text-xl" title="Previous Card">←</button>
+                                                <button onClick={(e) => { e.stopPropagation(); shuffleCards(); }} className="px-8 py-5 bg-amber-500 text-white font-black shadow-inner hover:bg-amber-600 transition-all uppercase text-sm tracking-tighter" title="Shuffle Deck">SHUFFLE</button>
+                                                <button onClick={(e) => { e.stopPropagation(); nextCard(); }} className="px-6 py-5 hover:bg-gray-100 transition-colors border-l border-gray-200 text-xl" title="Next Card">→</button>
+                                            </div>
+
+                                            <button className="flex-1 py-5 bg-green-100 text-green-700 border-2 border-green-200 rounded-3xl font-black hover:bg-green-200 shadow-sm transition-all uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); handleMark(true); }}>✅ Correct</button>
+                                        </div>
+                                        <button onClick={resetSession} className="text-gray-400 font-bold hover:text-green-700 transition self-center">Reset Entire Session</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center p-20 bg-white rounded-[3rem] shadow-xl border-4 border-dashed border-gray-100 w-full max-w-4xl">
+                                    <p className="text-4xl text-green-800 font-black mb-4">Herbarium Mastered! 🎉</p>
+                                    <p className="text-gray-500 mb-8 text-lg">You've successfully identified all {cards.length} plants.</p>
+                                    <button className="bg-green-800 text-white px-10 py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-green-900 transition-transform active:scale-95" onClick={resetSession}>START NEW SESSION</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<FlashcardApp />);
+    </script>
+</body>
+</html>
