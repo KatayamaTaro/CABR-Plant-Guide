@@ -1,6 +1,6 @@
 # CABR-Plant-Guide
 
-Heavy vibe coded html flashcard set for CABR native and invasive vegetation. Currently lists 145 plants! Includes scientific name and common name as well as a picture of the species.
+html flashcard set for CABR native and invasive vegetation. Currently lists 145 plants! Includes scientific name and common name as well as a picture of the species.
 
 
 User guide:
